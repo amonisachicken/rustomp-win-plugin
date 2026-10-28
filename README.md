@@ -196,7 +196,11 @@ ARTIFACT: C:/…/rustomp-win-plugin/build/msi/My Effect Setup (per-user).msi
 | `<Name> Setup (per-user).msi` | `%LOCALAPPDATA%\Programs\Common\{VST3,CLAP}` | 否 |
 
 两个包的 `UpgradeCode` 不同 = **两个产品身份**，所以同一台机器可以同时装两种范围，
-也可以各自独立升级/卸载。为什么不做成"一个向导里选"：Windows Installer 没有可靠的单包
+也可以各自独立升级/卸载。
+
+> ⚠ 但这不意味着"两种都装"是个好主意：两份文件的**插件身份（VST3 class id / CLAP id）完全相同**
+> （身份来自插件的 `identity.rs`，与安装位置无关）。同一台机器装两套，宿主会扫到重复插件。
+> 一台机器只装一种范围。为什么不做成"一个向导里选"：Windows Installer 没有可靠的单包
 双范围路径（实测会出"两处都写"的混合安装），完整证据见
 [docs/00-decisions.md](docs/00-decisions.md) W-010 与 [docs/09-devlog.md](docs/09-devlog.md) E8。
 
