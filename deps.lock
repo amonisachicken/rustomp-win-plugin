@@ -11,7 +11,12 @@ nih-plug-rev  = de42101
 cargo-nih-plug-install = cargo install --git https://github.com/robbert-vdh/nih-plug.git --rev de42101 cargo-nih-plug --locked
 
 # Rust 目标：Windows 只有 MSVC 可行（vst3-sys 要编 Steinberg 的 C++；GNU ABI 与宿主不兼容）
-rust-target = x86_64-pc-windows-msvc
+rust-target       = x86_64-pc-windows-msvc
+rust-target-arm64 = aarch64-pc-windows-msvc
+# arm64 交叉还需要 MSVC 的 ARM64 工具集（vcvarsamd64_arm64.bat）：
+#   setup.exe modify --installPath "<BuildTools 路径>" \
+#     --add Microsoft.VisualStudio.Component.VC.Tools.ARM64 --quiet --norestart
+# 注意：--quiet 必须是**一开始就提权**的进程，否则安装器直接退出码 5007。
 
 # CLAP SDK：仅供 tools/clap-probe 编译（读取 .clap 的端口/参数/身份）
 # 与 mac 仓同一个 tag，避免两边探针看到的 ABI 不同。

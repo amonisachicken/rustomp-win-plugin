@@ -3,7 +3,8 @@
 #
 # **rustomp-win-plugin 的入口** —— 契约 B 的实现（见 rustomp/docs/ecosystem.md §2）。
 #
-#   ./pack.sh <plugin_dir> [--variant mono|stereo|dual]... [--format vst3|clap]... [--no-install] [--no-verify]
+#   ./pack.sh <plugin_dir> [--variant mono|stereo|dual]... [--format vst3|clap]...
+#             [--arch x64|arm64|both] [--install-both] [--no-install] [--no-verify]
 #
 # 成功：**只在 stdout** 逐行打印 `ARTIFACT: <绝对路径>`，退出码 0。
 # 失败：非 0 退出 + 人话原因（缺 MSVC / 缺 rust target / 缺 cargo-nih-plug / 素材缺失 / 框架找不到…）。
@@ -20,7 +21,13 @@ PACKER_VERSION="$(git -C "$PACKER_ROOT" describe --tags --abbrev=0 2>/dev/null |
 [ -n "$PACKER_VERSION" ] || PACKER_VERSION="0.1.0"
 
 usage() {
-    sed -n '4,14p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+    sed -n '4,15p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+    echo
+    echo "架构（--arch）："
+    echo "  x64     默认；产出 <Name>.vst3 / <Name>.clap"
+    echo "  arm64   产出 <Name> (ARM64).vst3 / <Name> (ARM64).clap"
+    echo "  both    两套都产出；默认只把 x64 装到用户目录（两个架构的 identity 相同，"
+    echo "          同一台机器装两份会让宿主扫到重复身份），要都装加 --install-both"
     echo
     echo "环境变量："
     echo "  RUSTOMP_ROOT       框架目录（默认自动探测：<plugin_dir>/../rustomp）"
@@ -37,6 +44,8 @@ source "$PACKER_ROOT/scripts/lib.sh"
 PLUGIN_DIR="${PLUGIN_DIR:-}"
 VARIANTS=()
 FORMATS=()
+ARCH="x64"
+INSTALL_BOTH=0
 INSTALL=1
 VERIFY=1
 
@@ -45,6 +54,8 @@ while [ $# -gt 0 ]; do
         -h|--help) usage; exit 0 ;;
         --variant) VARIANTS+=("${2:?--variant 需要参数}"); shift 2 ;;
         --format)  FORMATS+=("${2:?--format 需要参数}");  shift 2 ;;
+        --arch)    ARCH="${2:?--arch 需要参数（x64|arm64|both）}"; shift 2 ;;
+        --install-both) INSTALL_BOTH=1; shift ;;
         --no-install) INSTALL=0; shift ;;
         --no-verify)  VERIFY=0; shift ;;
         -*) die "未知参数：$1（--help 看用法）" ;;
@@ -65,6 +76,12 @@ export PLUGIN_DIR
 for v in "${VARIANTS[@]}"; do
     case "$v" in mono|stereo|dual) ;; *) die "不支持的 variant：${v}（mono|stereo|dual）" ;; esac
 done
+case "$ARCH" in
+    x64|arm64|both) ;;
+    *) die "不支持的 arch：${ARCH}（x64|arm64|both）" ;;
+esac
+# 体检要知道目标架构：arm64 需要额外的 rust target 与 ARM64 MSVC 工具集
+export RUSTOMP_ARCH="$ARCH"
 for f in "${FORMATS[@]}"; do
     case "$f" in
         vst3|clap) ;;
@@ -105,7 +122,8 @@ fi
 for v in "${VARIANTS[@]}"; do
     log
     log "########## variant: ${v} ##########"
-    args=("$v")
+    args=("$v" --arch "$ARCH")
+    [ "$INSTALL_BOTH" = "1" ] && args+=(--install-both)
     [ "$INSTALL" = "1" ] || args+=(--no-install)
     [ "$VERIFY"  = "1" ] || args+=(--no-verify)
     "$PACKER_ROOT/scripts/build-variant.sh" "${args[@]}"

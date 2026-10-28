@@ -56,6 +56,28 @@ else
         winget install Microsoft.VisualStudio.2022.BuildTools --override \"--quiet --wait --norestart --add Microsoft.VisualStudio.Workload.VCTools --includeRecommended\""
 fi
 
+# ---- arm64 交叉工具链（只在 --arch arm64|both 时检查）----
+case "${RUSTOMP_ARCH:-x64}" in
+    arm64|both)
+        if command -v rustup >/dev/null 2>&1; then
+            if rustup target list --installed 2>/dev/null | grep -qx 'aarch64-pc-windows-msvc'; then
+                ok "rust target aarch64-pc-windows-msvc"
+            else
+                bad "缺 rust target aarch64-pc-windows-msvc（rustup target add aarch64-pc-windows-msvc）"
+            fi
+        fi
+        if _vca="$(find_vcvars arm64)"; then
+            ok "MSVC arm64 交叉环境：$_vca"
+        else
+            bad "没有 ARM64 交叉工具集（找不到 vcvarsamd64_arm64.bat）
+      装法（**必须一开始就提权**：静默模式不会自己弹 UAC）
+        \"C:\\Program Files (x86)\\Microsoft Visual Studio\\Installer\\setup.exe\" modify \\
+          --installPath \"C:\\Program Files (x86)\\Microsoft Visual Studio\\2022\\BuildTools\" \\
+          --add Microsoft.VisualStudio.Component.VC.Tools.ARM64 --quiet --norestart"
+        fi
+        ;;
+esac
+
 # ---- cargo-nih-plug：打包靠它（`cargo nih-plug bundle`）----
 # 陷阱：`cargo nih-plug --help` 探测会误报（没有 --help 子命令，返回非 0）；
 # 且开了 pipefail 时 `... | grep -q` 会让上游收到 SIGPIPE。所以用 command -v + case。

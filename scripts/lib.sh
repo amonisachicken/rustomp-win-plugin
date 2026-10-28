@@ -48,6 +48,12 @@ win_path() { cygpath -w "$1"; }
 # —— 症状是 `[ -f "$path" ]` 明明路径正确却判定文件不存在、eval 出的变量尾部带怪字符。
 py() { "$PYTHON" "$@" | tr -d '\r'; }
 
+# 让 Python 固定用 UTF-8 做 I/O。中文 Windows 的默认 codepage 是 936(GBK)，
+# Python 会把源码里的中文/✓ 编成 GBK 写进管道，bash 再按 UTF-8 解读 → 乱码。
+# 同时关掉文本模式的换行翻译（配合上面 py() 的双保险）。
+export PYTHONIOENCODING=utf-8
+export PYTHONUTF8=1
+
 # 用户的 LocalAppData（POSIX 形式）
 local_appdata() {
     local p
@@ -96,8 +102,18 @@ find_python() {
 
 # ---------------------------------------------------------------- MSVC
 
-# vcvars64.bat 的路径（POSIX 形式）。优先 vswhere（能挑到任意安装位置与版本）。
+# vcvars 脚本的路径（POSIX 形式），按**目标架构**选。
+#
+#   find_vcvars x64    → vcvars64.bat            （x64 宿主 → x64 目标）
+#   find_vcvars arm64  → vcvarsamd64_arm64.bat   （x64 宿主 → arm64 目标，交叉）
+#
+# 注意：arm64 目标**不能**用 vcvars64.bat —— 那套环境里的 cl/link 只会产出 x64 产物，
+# cargo 之后会报链接失败或产出错架构的 DLL。
 find_vcvars() {
+    local arch="${1:-x64}"
+    local script="vcvars64.bat"
+    [ "$arch" = "arm64" ] && script="vcvarsamd64_arm64.bat"
+
     local vsw="/c/Program Files (x86)/Microsoft Visual Studio/Installer/vswhere.exe"
     local inst
     if [ -x "$vsw" ]; then
@@ -106,15 +122,15 @@ find_vcvars() {
                     -property installationPath 2>/dev/null | tr -d '\r' | head -1 || true)"
         if [ -n "$inst" ]; then
             inst="$(cygpath -u "$inst" 2>/dev/null || true)"
-            if [ -n "$inst" ] && [ -f "$inst/VC/Auxiliary/Build/vcvars64.bat" ]; then
-                printf '%s' "$inst/VC/Auxiliary/Build/vcvars64.bat"
+            if [ -n "$inst" ] && [ -f "$inst/VC/Auxiliary/Build/$script" ]; then
+                printf '%s' "$inst/VC/Auxiliary/Build/$script"
                 return 0
             fi
         fi
     fi
     local g
-    for g in "/c/Program Files/Microsoft Visual Studio/2022"/*/VC/Auxiliary/Build/vcvars64.bat \
-             "/c/Program Files (x86)/Microsoft Visual Studio/2022"/*/VC/Auxiliary/Build/vcvars64.bat; do
+    for g in "/c/Program Files/Microsoft Visual Studio/2022"/*/VC/Auxiliary/Build/"$script" \
+             "/c/Program Files (x86)/Microsoft Visual Studio/2022"/*/VC/Auxiliary/Build/"$script"; do
         if [ -f "$g" ]; then printf '%s' "$g"; return 0; fi
     done
     return 1
@@ -122,18 +138,24 @@ find_vcvars() {
 
 # 在 MSVC 环境里跑一条 cmd 命令行。
 #
-#   msvc_run <workdir(POSIX)> <cmd 命令行（Windows 风格，已自行加引号）>
+#   msvc_run <workdir(POSIX)> <arch: x64|arm64> <cmd 命令行（Windows 风格，已自行加引号）>
 #
 # 用"生成 .bat 再 cmd //c 调它"而不是 `cmd //c "call vcvars && ..."`：
 # MSYS 会把长参数里的路径/斜杠做启发式转换，实测会破坏 `&&` 链与引号。
 msvc_run() {
     local workdir="$1"; shift
+    local arch="$1"; shift
     local cmdline="$*"
-    local vc bat v
-    vc="$(find_vcvars)" || die "找不到 vcvars64.bat —— 需要 Visual Studio Build Tools 的「使用 C++ 的桌面开发」工作负载
-      装法（管理员）：winget install Microsoft.VisualStudio.2022.BuildTools --override \"--quiet --wait --norestart --add Microsoft.VisualStudio.Workload.VCTools --includeRecommended\""
+    local vc bat v script
+    [ "$arch" = "arm64" ] && script="vcvarsamd64_arm64.bat" || script="vcvars64.bat"
+    vc="$(find_vcvars "$arch")" || die "找不到 $script —— 目标架构 ${arch} 的 MSVC 工具集没装
+      基础（x64）：winget install Microsoft.VisualStudio.2022.BuildTools --override \"--quiet --wait --norestart --add Microsoft.VisualStudio.Workload.VCTools --includeRecommended\"
+      arm64 交叉：提权运行（静默模式必须一开始就是管理员）
+        \"C:\\Program Files (x86)\\Microsoft Visual Studio\\Installer\\setup.exe\" modify \\
+          --installPath \"C:\\Program Files (x86)\\Microsoft Visual Studio\\2022\\BuildTools\" \\
+          --add Microsoft.VisualStudio.Component.VC.Tools.ARM64 --quiet --norestart"
     mkdir -p "$ROOT/build"
-    bat="$ROOT/build/.msvc.bat"
+    bat="$ROOT/build/.msvc-${arch}.bat"
     {
         printf '@echo off\r\n'
         printf 'call "%s" >nul 2>&1\r\n' "$(win_path "$vc")"
@@ -160,7 +182,10 @@ msvc_run() {
         printf 'exit /b %%ERRORLEVEL%%\r\n'
     } > "$bat"
     set +e
-    ( cd "$workdir" && cmd //c "$(win_path "$bat")" )
+    # 1>&2：编译器的 stdout 必须并到 stderr。
+    # MSVC 的 cl.exe 会往 **stdout** 打 "xxx.c" 这种横幅，一旦漏出去就破坏契约 B
+    # （stdout 只允许 ARTIFACT 行）。cargo/rustc 本来都写 stderr，但 cl/clang 不一定。
+    ( cd "$workdir" && cmd //c "$(win_path "$bat")" 1>&2 )
     local rc=$?
     set -e
     return "$rc"

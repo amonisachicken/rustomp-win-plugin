@@ -4,3 +4,4 @@ target/
 third_party/
 *.log
 .msvc.bat
+.msvc-*.bat

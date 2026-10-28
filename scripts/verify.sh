@@ -23,17 +23,19 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 source "$ROOT/scripts/plugin-env.sh"
 
 VARIANT=""
+ARCH="x64"
 WITH_GUI=0
 REQUIRE="${RUSTOMP_REQUIRE_VERIFY:-0}"
 while [ $# -gt 0 ]; do
     case "$1" in
         --variant) VARIANT="${2:?--variant 需要参数}"; shift 2 ;;
+        --arch)    ARCH="${2:?--arch 需要参数（x64|arm64）}"; shift 2 ;;
         --with-gui) WITH_GUI=1; shift ;;
         --require) REQUIRE=1; shift ;;
         *) die "未知参数：$1" ;;
     esac
 done
-[ -n "$VARIANT" ] || die "用法: $0 --variant <mono|stereo|dual> [--with-gui] [--require]"
+[ -n "$VARIANT" ] || die "用法: $0 --variant <mono|stereo|dual> [--arch x64|arm64] [--with-gui] [--require]"
 
 case "$VARIANT" in
     mono)   SUFFIX=" Mono" ;;
@@ -41,7 +43,12 @@ case "$VARIANT" in
     dual)   SUFFIX="" ;;
     *) die "未知变体：$VARIANT" ;;
 esac
-NAME="$PLUGIN_NAME$SUFFIX"
+case "$ARCH" in
+    x64)   ARCH_SUFFIX="";         ARCH_SUB="x86_64-win" ;;
+    arm64) ARCH_SUFFIX=" (ARM64)"; ARCH_SUB="arm_64-win" ;;
+    *) die "未知架构：$ARCH（x64|arm64）" ;;
+esac
+NAME="$PLUGIN_NAME$SUFFIX$ARCH_SUFFIX"
 BUNDLED="$PLUGIN_DIR/target/bundled"
 VST3="$BUNDLED/${NAME}.vst3"
 CLAP="$BUNDLED/${NAME}.clap"
@@ -49,7 +56,30 @@ CLAP="$BUNDLED/${NAME}.clap"
 FAILED=0
 SKIPPED=0
 
-log "==> 宿主侧验证：${NAME}"
+log "==> 宿主侧验证：${NAME}（${ARCH}）"
+
+# 本进程是 x64 的：LoadLibrary 一个 arm64 DLL 只会得到 ERROR_BAD_EXE_FORMAT，
+# pluginval 也只有 x64 版。所以 arm64 做不了"运行时验证" —— 只做静态校验
+# （PE Machine 字段 + 目录结构），并把这件事**明说**，绝不假装通过。
+if [ "$ARCH" != "x64" ]; then
+    log "  ${ARCH} 产物无法在 x64 进程里加载：跳过 clap-probe / pluginval，只做静态校验"
+    _dll="$VST3/Contents/${ARCH_SUB}/${NAME}.vst3"
+    if [ -f "$_dll" ]; then
+        "$PYTHON" "$ROOT/scripts/pe_machine.py" "$_dll" "$ARCH" && ok "VST3 内层 DLL 架构 = ${ARCH}" || FAILED=1
+    else
+        warn "找不到内层 DLL：$_dll"; FAILED=1
+    fi
+    if [ -f "$CLAP" ]; then
+        "$PYTHON" "$ROOT/scripts/pe_machine.py" "$CLAP" "$ARCH" && ok "CLAP 架构 = ${ARCH}" || FAILED=1
+    fi
+    log
+    [ "$FAILED" = "1" ] && die "静态校验未通过"
+    if [ "$REQUIRE" = "1" ]; then
+        die "RUSTOMP_REQUIRE_VERIFY=1：arm64 只做了静态校验，不能当成\"运行时验证通过\""
+    fi
+    warn "arm64 仅静态校验通过；运行时兼容性必须在一台 ARM 机器上验证"
+    exit 0
+fi
 
 # ---------------------------------------------------------------- 1. clap-probe
 if [ ! -f "$CLAP" ]; then
@@ -63,7 +93,7 @@ else
         PROBE="$ROOT/build/clap_probe.exe"
         mkdir -p "$ROOT/build"
         log "  编译 clap-probe（MSVC）"
-        msvc_run "$ROOT/build" \
+        msvc_run "$ROOT/build" x64 \
             "cl /nologo /utf-8 /O2 /W3 /Fe:\"$(win_path "$PROBE")\" \"$(win_path "$ROOT/tools/clap-probe/clap_probe.c")\" /I\"$(win_path "$SDK_INC")\"" \
             || { warn "clap-probe 编译失败"; FAILED=1; }
         if [ -x "$PROBE" ] || [ -f "$PROBE" ]; then

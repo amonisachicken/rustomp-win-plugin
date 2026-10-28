@@ -5,6 +5,7 @@
 platforms = ["windows"]
 formats   = ["vst3", "clap"]
 variants  = ["mono", "stereo", "dual"]
+arches    = ["x64", "arm64"]
 
 # 本期不做（prompt.md 明确排除；AU 是 Apple 专有，Windows 上不存在）
 standalone = false
@@ -14,11 +15,22 @@ au         = false
 install_scope = "user"
 install_paths = { vst3 = "%LOCALAPPDATA%/Programs/Common/VST3", clap = "%LOCALAPPDATA%/Programs/Common/CLAP" }
 
+# 两个架构的 identity（VST3 class id / CLAP id）**完全相同**（身份来自 identity.rs，与架构无关）。
+# 因此 --arch both 默认只安装 x64；同机装两份会让宿主扫到重复身份。
+duplicate_identity_across_arches = true
+
+# 验证能力矩阵（诚实声明：arm64 在本机（x64）只能静态校验）
+verify = { x64 = ["clap-probe", "pluginval"], arm64 = ["pe-machine", "structure"] }
+
 requires = [
   "cargo/rustc x86_64-pc-windows-msvc",
   "MSVC v143 + Windows SDK (vswhere: Microsoft.VisualStudio.Component.VC.Tools.x86.x64)",
   "cargo-nih-plug (rev 见 deps.lock)",
   "python >= 3.11 (tomllib，读 rustomp.toml 用)",
+]
+requires_arm64 = [
+  "rustup target aarch64-pc-windows-msvc",
+  "MSVC ARM64 交叉工具集（vcvarsamd64_arm64.bat，组件 Microsoft.VisualStudio.Component.VC.Tools.ARM64）",
 ]
 optional = [
   "pluginval (VST3 宿主侧验证；没有则跳过并给出安装提示)",
