@@ -25,3 +25,9 @@ clap-sdk-tag = 1.2.9
 # 宿主侧验证器（可选，但强烈建议）：Tracktion 的 pluginval
 pluginval-release = v1.0.3
 pluginval-url     = https://github.com/Tracktion/pluginval/releases/download/v1.0.3/pluginval_Windows.zip
+
+# MSI 打包（可选）：WiX Toolset 3.14 的**免安装二进制 zip**
+# 选 v3 而不是 v4/v5 的原因：v4+ 是 dotnet tool，必须装 .NET SDK（约 500 MB）；
+# v3 的 candle/light 是独立 exe（运行时只要 .NET Framework 3.5，Win10 自带可启用）。
+wix-release      = wix3141rtm
+wix-binaries-url = https://github.com/wixtoolset/wix3/releases/download/wix3141rtm/wix314-binaries.zip

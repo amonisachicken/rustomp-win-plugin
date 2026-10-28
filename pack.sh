@@ -85,14 +85,15 @@ case "$ARCH" in
     x64|arm64|both) ;;
     *) die "不支持的 arch：${ARCH}（x64|arm64|both）" ;;
 esac
-# 体检要知道目标架构：arm64 需要额外的 rust target 与 ARM64 MSVC 工具集
+# 体检要知道目标架构与格式：arm64 需要额外工具链，msi 需要 WiX
 export RUSTOMP_ARCH="$ARCH"
+export RUSTOMP_FORMATS="${FORMATS[*]}"
 for f in "${FORMATS[@]}"; do
     case "$f" in
-        vst3|clap) ;;
+        vst3|clap|msi) ;;
         au) die "Windows 上没有 AU —— Audio Unit 是 Apple 的宿主 API，本平台只能出 VST3 / CLAP。
       这与 rustomp/docs/declarative-build.md §4.4 的平台矩阵一致（Windows: au ❌）。" ;;
-        *) die "不支持的 format：${f}（vst3|clap）" ;;
+        *) die "不支持的 format：${f}（vst3|clap|msi）" ;;
     esac
 done
 
@@ -162,21 +163,50 @@ for v in "${VARIANTS[@]}"; do
     "$PACKER_ROOT/scripts/build-variant.sh" "${args[@]}"
 done
 
-# ---------------------------------------------------------------- 5. 契约 B 的输出
+# ---------------------------------------------------------------- 5. MSI 安装包（可选）
+# MSI 是"把本次构建的全部产物装成一个产品"的容器，所以放在所有变体构建完之后单独一步：
+# 按范围出两个包（系统级 / 用户级），见 scripts/build-msi.sh 顶部说明。
+MSI_PATHS=()
+have_msi=0
+for f in "${FORMATS[@]}"; do [ "$f" = "msi" ] && have_msi=1; done
+if [ "$have_msi" = "1" ]; then
+    log
+    log "########## MSI 安装包 ##########"
+    if [ "$INSTALL" = "1" ]; then
+        log "    注意：打 MSI 时不做目录安装（安装交给安装包自己）。下面仍会装一份到用户目录，"
+        log "          方便你立刻试听；加 --no-install 可只出包。"
+    fi
+    for a in $(echo "$ARCH" | sed 's/both/x64 arm64/'); do
+        # shellcheck disable=SC2046
+        while IFS= read -r line; do
+            [ -n "$line" ] && MSI_PATHS+=("$line")
+        done < <("$PACKER_ROOT/scripts/build-msi.sh" --variants "${VARIANTS[*]}" --arch "$a")
+    done
+else
+    # 只有 msi 被请求时才产出；其余情况照旧
+    :
+fi
+
+# ---------------------------------------------------------------- 6. 契约 B 的输出
 log
 log "==> 产物"
 ARTIFACTS=()
 for v in "${VARIANTS[@]}"; do
-    TSV="$PACKER_ROOT/build/artifacts-${v}.tsv"
-    [ -f "$TSV" ] || die "缺产物清单：$TSV（构建脚本没写出结果？）"
-    while IFS= read -r p; do
-        [ -n "$p" ] || continue
-        for f in "${FORMATS[@]}"; do
-            case "$p" in
-                *".$f") ARTIFACTS+=("$p"); break ;;
-            esac
-        done
-    done < "$TSV"
+    for a in $(echo "$ARCH" | sed 's/both/x64 arm64/'); do
+        TSV="$PACKER_ROOT/build/artifacts-${v}-${a}.tsv"
+        [ -f "$TSV" ] || die "缺产物清单：$TSV（构建脚本没写出结果？）"
+        while IFS= read -r p; do
+            [ -n "$p" ] || continue
+            for f in "${FORMATS[@]}"; do
+                case "$p" in
+                    *".$f") ARTIFACTS+=("$p"); break ;;
+                esac
+            done
+        done < "$TSV"
+    done
+done
+for p in "${MSI_PATHS[@]+"${MSI_PATHS[@]}"}"; do
+    ARTIFACTS+=("$p")
 done
 
 # 路径统一成 Windows 原生形式（C:/…）：这是 Windows 打包器，产物路径最终会出现在

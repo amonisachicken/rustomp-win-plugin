@@ -83,3 +83,30 @@ arm64 产物在本机（x64）**做不了运行时验证**：
 2. 失败就设 `FAILED=1`（不要 `exit`，让其余检查也跑完）；
 3. 断言要尽量**具体到值**（例如 `channels=1`），不要只判"有输出"；
 4. 新断言写进本文 §1 的矩阵，注明"失败时说明什么"。
+
+---
+
+## 6. MSI 安装包怎么验（`--format msi`）
+
+MSI 的验证是**安装/卸载生命周期**，不是插件行为（插件行为已由 clap-probe/pluginval 覆盖）。
+判据是"文件落到哪、有没有串味、卸干净没有"：
+
+| 用例 | 命令（静默） | 通过判据 |
+|---|---|---|
+| 用户级安装 | `msiexec /i "…Setup (per-user).msi" /qn` | rc=0；`%LOCALAPPDATA%\Programs\Common\{VST3,CLAP}` 各出现全部产物；**系统目录保持 0** |
+| 用户级卸载 | `msiexec /x "…Setup (per-user).msi" /qn` | rc=0；两处目录都清空 |
+| 系统级安装 | 提权后 `msiexec /i "…Setup (system).msi" /qn` | rc=0；`C:\Program Files\Common Files\{VST3,CLAP}` 各出现全部产物；**用户目录保持 0** |
+| 系统级卸载 | 提权后 `msiexec /x "…Setup (system).msi" /qn` | rc=0；两处目录都清空 |
+
+实测记录（2026-10-29，本机 x64，4 个产物 / 每个包约 3.9 MB）见
+[`09-devlog.md`](09-devlog.md) E8。
+
+两条自动化时的注意事项：
+
+1. **用 Windows 原生 Python（或 PowerShell）调 `msiexec`**：MSYS2 的 python 传参会撞上
+   MSYS 的路径转换，得到 `1619`/`1639` 这种"参数无效"的假错误；
+2. **提权用例必须显式提权**（`Start-Process -Verb RunAs`）：系统级包写 `Program Files`，
+   不提权会得到 `1603`，看起来像包坏了。
+
+为什么不是"一个包两种范围"：见 [`00-decisions.md`](00-decisions.md) W-010 —— 那是
+Windows Installer 的平台限制，实测会出"两处都写"的混合安装。

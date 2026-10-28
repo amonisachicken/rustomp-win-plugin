@@ -14,6 +14,7 @@
 | W-007 | arm64 **只做静态校验**，`REQUIRE_VERIFY=1` 时主动失败 | x64 进程加载不了 arm64 DLL；不许把"没验证"当"通过" |
 | W-008 | **stdout 只允许 `ARTIFACT:` 行**，其余全走 stderr | 契约 B；框架/CI 靠它判成功 |
 | W-009 | 不针对任何插件：默认变体取 `[build] variants`，`WS_ROOT` 复刻 nih-plug 规则 | 换一个插件项目不该改脚本 |
+| W-010 | MSI 用 **WiX 3.14 免安装 zip**，且**按范围出两个包**（系统 / 用户） | 单包双范围会被 MSI 重新定价，实测出现"两处都写" |
 
 ---
 
@@ -131,3 +132,28 @@ pluginval 也只有 x64 版。
 - 代码/配置里不出现任何插件名（文档里的示例除外）。
 
 **后果**：换一个插件项目 = 换一个目录参数，脚本一行不改。
+
+---
+
+## W-010 MSI：WiX 3.14 免安装 zip + 按范围出两个包
+
+**背景**：需求是"安装时可选装入系统目录或用户目录"。看起来最自然的实现是
+**一个 MSI** + 安装向导里一个单选（`ALLUSERS` / `MSIINSTALLPERUSER` 切换）。
+
+**试过，不行**（完整实验见 [`09-devlog.md`](09-devlog.md) E8）：
+- Windows Installer 对"同一个包既能装系统又能装用户"没有官方路径。改 `ALLUSERS`/
+  `MSIINSTALLPERUSER` 的时机稍晚一点，MSI 就按自己的判定重新定价；
+- 实测出现过**系统目录与用户目录同时被写入**的混合安装（安装还悄悄提了权），
+  卸载时又因为包身份不一致而失败。
+
+**决定**：
+1. 工具链用 **WiX 3.14 的免安装二进制 zip**（`third_party/wix/`）：`candle`/`light` 是独立 exe，
+   只依赖 .NET Framework 3.5；换成 WiX v4/v5 要装 .NET SDK（约 500 MB），对"干净机器"负担太大。
+2. **按范围出两个 MSI**，各自固定、不依赖运行时判定：
+   - `<Name> Setup (system).msi` → `CommonFiles64Folder\VST3|CLAP`，需管理员；
+   - `<Name> Setup (per-user).msi` → `LocalAppData\Programs\Common\VST3|CLAP`，免 UAC。
+   "选择"发生在**选哪个包**；两个包的 `UpgradeCode` 不同（不同产品身份），
+   所以同一台机器可以同时存在两种范围而不互相覆盖。
+
+**后果**：真正的"一个向导里选范围"需要再包一层 EXE 引导器（NSIS / Burn，见 W-011 待定）；
+两个 MSI 的安装/卸载生命周期都实测通过（`docs/03-verify.md` §6）。

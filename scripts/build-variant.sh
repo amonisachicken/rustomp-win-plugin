@@ -78,13 +78,14 @@ wants_install() {
 }
 
 mkdir -p "$ROOT/build"
-TSV="$ROOT/build/artifacts-${VARIANT}.tsv"
-: > "$TSV"
 
 for a in "${ARCHES[@]}"; do
     NAME="$PLUGIN_NAME$SUFFIX$(arch_suffix "$a")"
     TRIPLE="$(arch_triple "$a")"
     VST3_SUB="$(arch_vst3dir "$a")"
+    # 每个 (变体, 架构) 一份产物清单：MSI 按架构打包时要精确挑，不能靠文件名猜
+    TSV="$ROOT/build/artifacts-${VARIANT}-${a}.tsv"
+    : > "$TSV"
 
     log
     log "===== ${VARIANT} / ${a} → ${NAME} ====="

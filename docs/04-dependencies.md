@@ -18,6 +18,7 @@
 | 6 | rustomp 框架仓（同级目录） | **必需** | ~10 MB | ~30 MB |
 | 7 | CLAP SDK（给 clap-probe） | 强烈建议 | ~1 MB | ~0.4 MB |
 | 8 | pluginval（VST3 验证） | 建议 | ~1.4 MB | ~3.3 MB |
+| 8b | WiX 3.14 免安装 zip（打 MSI） | 仅 MSI | ~40 MB | ~75 MB |
 | 9 | rust target `aarch64-pc-windows-msvc` | 仅 arm64 | ~50 MB | ~400 MB |
 | 10 | MSVC ARM64 交叉工具集 | 仅 arm64 | ~250 MB | ~1 GB |
 
@@ -171,6 +172,25 @@ git clone https://github.com/amonisachicken/rustomp.git
 
 解压到 `third_party/pluginval/pluginval.exe`（v1.0.3，约 3.3 MB）。
 也可以用 `PLUGINVAL=/path/to/pluginval.exe` 指定已有副本。
+
+---
+
+## 8b. WiX 3.14（只在打 MSI 时需要）
+
+```bash
+./scripts/fetch-third-party.sh --wix            # 需要能访问 GitHub releases（约 40 MB）
+```
+
+解压到 `third_party/wix/`（`candle.exe` / `light.exe` / `WixUIExtension.dll` 等 71 个文件）。
+
+**为什么是 WiX v3 而不是 v4/v5**：v4+ 是 dotnet tool，必须装 .NET SDK（约 500 MB）；
+v3 的 candle/light 是独立 exe，运行时只要 **.NET Framework 3.5**（Win10 自带，可在
+「启用或关闭 Windows 功能 → .NET Framework 3.5」勾选）。本机实测 v3.14.1 直接可用。
+
+**不需要**：Visual Studio IDE、CMake、NSIS、任何 .NET SDK。
+
+装上之后 `doctor.sh --format msi` 会检查它；没装时 `pack.sh --format msi` 会明确告诉你
+跑哪条命令，而不是让 light 报天书。
 
 ---
 

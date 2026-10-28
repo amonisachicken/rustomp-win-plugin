@@ -170,6 +170,19 @@ PY
     fi
 fi
 
+# ---- 可选：WiX（只有要打 MSI 时）----
+case " ${RUSTOMP_FORMATS:-} " in
+    *" msi "*)
+        if [ -x "$ROOT/third_party/wix/candle.exe" ]; then
+            ok "WiX：$ROOT/third_party/wix（免安装 zip）"
+        else
+            bad "要打 MSI 但没有 WiX —— 先跑 ./scripts/fetch-third-party.sh --wix
+      说明：用 WiX 3.14 的免安装 zip（candle/light 独立 exe），不需要 .NET SDK；
+           运行时依赖 .NET Framework 3.5（Win10 可在「启用或关闭 Windows 功能」里勾上）"
+        fi
+        ;;
+esac
+
 # ---- 可选：宿主侧验证器 ----
 if [ -x "$ROOT/third_party/pluginval/pluginval.exe" ]; then
     ok "pluginval：$ROOT/third_party/pluginval/pluginval.exe"

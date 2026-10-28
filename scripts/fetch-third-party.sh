@@ -5,6 +5,8 @@
 #
 #   ./scripts/fetch-third-party.sh             # CLAP SDK（编译 clap-probe 用）
 #   ./scripts/fetch-third-party.sh --pluginval # 顺带下 pluginval（VST3 验证器）
+#   ./scripts/fetch-third-party.sh --wix       # 顺带下 WiX 3.14 免安装 zip（打 MSI 用）
+#   ./scripts/fetch-third-party.sh --all       # 上面都要
 #
 # 与 mac 仓的 fetch-third-party.sh 相比简单得多：Windows 侧不需要 clap-wrapper /
 # AudioUnitSDK（那是 AU 专用的），只剩 CLAP 头文件；CMake 也不参与构建。
@@ -22,7 +24,16 @@ TP="$ROOT/third_party"
 mkdir -p "$TP"
 
 WANT_PLUGINVAL=0
-[ "${1:-}" = "--pluginval" ] && WANT_PLUGINVAL=1
+WANT_WIX=0
+for a in "$@"; do
+    case "$a" in
+        --pluginval) WANT_PLUGINVAL=1 ;;
+        --wix)       WANT_WIX=1 ;;
+        --all)       WANT_PLUGINVAL=1; WANT_WIX=1 ;;
+        -h|--help)   sed -n '2,10p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
+        *) die "未知参数：$a（--pluginval | --wix | --all）" ;;
+    esac
+done
 
 CLAP_TAG="$(sed -n 's/^clap-sdk-tag *= *//p' "$ROOT/deps.lock" | tr -d '\r ')"
 [ -n "$CLAP_TAG" ] || die "deps.lock 里没有 clap-sdk-tag"
@@ -85,6 +96,36 @@ PY
             cp -R "$(dirname "$inner")/." "$TP/pluginval/"
         fi
         ok "就绪：$TP/pluginval/pluginval.exe"
+    fi
+fi
+
+if [ "$WANT_WIX" = "1" ]; then
+    log "==> WiX 3.14（打 MSI 用；免安装 zip，不需要 .NET SDK）"
+    if [ -x "$TP/wix/candle.exe" ]; then
+        ok "已存在：$TP/wix/candle.exe"
+    else
+        RX_URL="$(sed -n 's/^wix-binaries-url *= *//p' "$ROOT/deps.lock" | tr -d '\r ')"
+        [ -n "$RX_URL" ] || die "deps.lock 里没有 wix-binaries-url"
+        PY="$(find_python)" || die "找不到 python（解压 zip 用它，避免依赖 unzip）"
+        ZIP="$TP/wix.zip"
+        log "    下载 $RX_URL"
+        if command -v curl >/dev/null 2>&1; then
+            curl -fL --retry 3 -o "$ZIP" "$RX_URL" \
+                || die "下载失败（GitHub 的 https 直连在本机不通：先 source ~/vpn.env 再重跑）"
+        else
+            "$PY" - "$RX_URL" "$ZIP" <<'PY' || die "下载失败（先 source ~/vpn.env 再重跑）"
+import sys, urllib.request
+urllib.request.urlretrieve(sys.argv[1], sys.argv[2])
+PY
+        fi
+        mkdir -p "$TP/wix"
+        "$PY" - "$ZIP" "$TP/wix" <<'PY'
+import sys, zipfile
+zipfile.ZipFile(sys.argv[1]).extractall(sys.argv[2])
+PY
+        rm -f "$ZIP"
+        [ -x "$TP/wix/candle.exe" ] || die "zip 里没有 candle.exe（结构变了？）"
+        ok "就绪：$TP/wix（$(ls -1 "$TP/wix" | wc -l) 个文件）"
     fi
 fi
 

@@ -3,7 +3,7 @@
 # 驱动读这份文件校验「请求的格式 ⊆ 本平台支持」，不支持时明确报错而不是静默跳过。
 
 platforms = ["windows"]
-formats   = ["vst3", "clap"]
+formats   = ["vst3", "clap", "msi"]
 variants  = ["mono", "stereo", "dual"]
 arches    = ["x64", "arm64"]
 
@@ -11,9 +11,10 @@ arches    = ["x64", "arm64"]
 standalone = false
 au         = false
 
-# 安装范围：用户级（免 UAC）
-install_scope = "user"
+# 安装范围：MSI 按范围出**两个包**（Windows Installer 没有可靠的单包双范围路径，见 W-010）
+install_scope = "user-or-machine"
 install_paths = { vst3 = "%LOCALAPPDATA%/Programs/Common/VST3", clap = "%LOCALAPPDATA%/Programs/Common/CLAP" }
+install_paths_machine = { vst3 = "%ProgramFiles%/Common Files/VST3", clap = "%ProgramFiles%/Common Files/CLAP" }
 
 # 两个架构的 identity（VST3 class id / CLAP id）**完全相同**（身份来自 identity.rs，与架构无关）。
 # 因此 --arch both 默认只安装 x64；同机装两份会让宿主扫到重复身份。
@@ -34,4 +35,5 @@ requires_arm64 = [
 ]
 optional = [
   "pluginval (VST3 宿主侧验证；没有则跳过并给出安装提示)",
+  "WiX 3.14 免安装 zip (只打 MSI 时需要；./scripts/fetch-third-party.sh --wix)",
 ]

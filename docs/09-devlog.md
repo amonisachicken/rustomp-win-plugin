@@ -132,3 +132,74 @@
 
 回归：默认路径（读清单 → mono+stereo → x64）与既有产物均验证通过，
 `2>/dev/null` 下 stdout 仍然只有 `ARTIFACT:` 行。
+
+---
+
+## E8　MSI 安装包：一次失败的单包设计，和最终的两包方案（2026-10-29）
+
+### 目标
+
+`pack.sh --format msi` 出一个安装包，**安装时能选**装进系统目录
+（`C:\Program Files\Common Files\VST3`）还是用户目录（`%LOCALAPPDATA%\Programs\Common\VST3`）。
+
+### 第一版：单包 + 向导选范围（失败）
+
+设计：一个 MSI，两套目录树（machine / user），两个 Feature 用 `Condition Level="0"`
+按 `ALLUSERS` / `MSIINSTALLPERUSER` 互斥；自定义向导页 `RustompScopeDlg` 选范围，
+用 type 51 自定义动作在 `CostInitialize` 之前把这两个属性设好。
+
+逐步踩到的坑（每条都是实测结论，不是猜测）：
+
+| 现象 | 根因 |
+|---|---|
+| `Error 1925` 装不上 | 属性设得太晚：**execute 序列**里改 `ALLUSERS` 已经无效，MSI 在引擎启动时就定了价 |
+| `MSIINSTALLPERUSER property is not valid for UAC compliant package` | 包标成 `InstallPrivileges="limited"` 时 MSI 会直接忽略它；改回 `InstallScope="perMachine"` 才被接受 |
+| 两个 `Feature` 都不生效 / 都生效 | 包里的 `Property ALLUSERS=1` 与运行时设成 2 打架，日志里能看到 "Modifying ALLUSERS ... Deleting ... Adding" 反复 |
+| `LGHT0311: codepage 1252` | WiX 3.14 的 UI 扩展只带 en-US 资源，写中文会撞码页（试过 `Language="2052" Codepage="936"`，无效） |
+| `LGHT0091: Duplicate symbol` | 自己的对话框叫 `InstallScopeDlg` 会和 UI 扩展里的同名符号撞；`ARPNOMODIFY`/`ARPNOREPAIR` 也一样 |
+| `LGHT0103: cannot find file` | WiX 是 Windows 程序，`Source` 必须是 `C:\…`；MSYS 的 `/c/…` 它不认 |
+
+最糟的一条：自动化驱动向导（默认选"仅当前用户"）之后，**系统目录与用户目录同时被写入**了 ——
+UI 序列按 per-user 定价、execute 序列又按 per-machine 重新定价，中间还悄悄提了权
+（自动化回车把 UAC 一起按了）。卸载也因为这个混合状态失败（1603）。
+
+> 结论：**Windows Installer 没有"一个包既能装系统又能装用户"的可靠路径。**
+> 这是平台限制，不是实现没写对。
+
+### 最终方案：两个固定范围的 MSI
+
+```
+<Name> Setup (system).msi     CommonFiles64Folder\VST3|CLAP     需要管理员
+<Name> Setup (per-user).msi   LocalAppData\Programs\Common\…    免 UAC
+```
+
+要点（写进 `scripts/gen-wix.py` 的注释）：
+
+- 两个包的 `UpgradeCode` **不同**（按 `name+scope` 推导），所以是**两个产品身份**：
+  同一台机器可以同时存在两种范围，互不升级/覆盖；
+- 用户范围：组件**必须用 HKCU 注册表值做 KeyPath**（ICE38），且用户目录的每一层都要
+  `RemoveFolder`（ICE64），否则卸载留空目录；
+- 系统范围：`CommonFiles64Folder` + 组件 `Win64="yes"`；
+- GUID 全部 `uuid5` 确定性推导（同版本重复构建字节稳定）；
+- UI 换成 `WixUI_Minimal`（欢迎 → 确认 → 进度 → 完成），**不再需要自定义对话框**；
+  文本一律 ASCII；
+- 编译：`candle -arch x64|arm64` + `light -ext WixUIExtension.dll`，忽略 ICE91（per-user 常见警告）。
+
+### 实测（2026-10-29，本机 x64）
+
+| 用例 | 结果 |
+|---|---|
+| `per-user` 静默安装（不提权） | rc=0；`%LOCALAPPDATA%` 下 2 个 `.vst3` + 2 个 `.clap`，系统目录 0 |
+| `per-user` 卸载 | rc=0；四个目录全清空 |
+| `system` 静默安装（提权） | rc=0；`C:\Program Files\Common Files` 下 2+2，用户目录 0 |
+| `system` 卸载（提权） | rc=0；全清空 |
+| 包体 | 各约 **3.9 MB**（4 个产物，版本 0.1.0，x64） |
+| `pack.sh --format msi` | stdout 只有两行 `ARTIFACT:`（两个 MSI），符合契约 B |
+
+### 顺带学到的两条工具链经验
+
+1. **WiX 3.14 免安装 zip 够用**：`candle`/`light` 是独立 exe，只依赖 .NET Framework 3.5；
+   换 WiX v4/v5 要装 .NET SDK（约 500 MB），对干净机器不划算。
+2. **msiexec 的自动化要用 Windows 的原生 Python/PowerShell 调**：用 MSYS2 的 python
+   `subprocess` 传参数会被 MSYS 的路径转换搅乱（`1619`/`1639` 这类"参数无效"的假错误），
+   换成 `C:\…\Python313\python.exe` 或 PowerShell 的 `Start-Process` 就正常。
