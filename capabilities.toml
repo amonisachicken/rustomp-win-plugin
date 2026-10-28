@@ -1,0 +1,25 @@
+# rustomp-win-plugin 的能力声明（rustomp/docs/declarative-build.md §4.3）
+#
+# 驱动读这份文件校验「请求的格式 ⊆ 本平台支持」，不支持时明确报错而不是静默跳过。
+
+platforms = ["windows"]
+formats   = ["vst3", "clap"]
+variants  = ["mono", "stereo", "dual"]
+
+# 本期不做（prompt.md 明确排除；AU 是 Apple 专有，Windows 上不存在）
+standalone = false
+au         = false
+
+# 安装范围：用户级（免 UAC）
+install_scope = "user"
+install_paths = { vst3 = "%LOCALAPPDATA%/Programs/Common/VST3", clap = "%LOCALAPPDATA%/Programs/Common/CLAP" }
+
+requires = [
+  "cargo/rustc x86_64-pc-windows-msvc",
+  "MSVC v143 + Windows SDK (vswhere: Microsoft.VisualStudio.Component.VC.Tools.x86.x64)",
+  "cargo-nih-plug (rev 见 deps.lock)",
+  "python >= 3.11 (tomllib，读 rustomp.toml 用)",
+]
+optional = [
+  "pluginval (VST3 宿主侧验证；没有则跳过并给出安装提示)",
+]

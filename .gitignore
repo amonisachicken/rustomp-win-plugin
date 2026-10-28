@@ -1,0 +1,6 @@
+# 本仓不入库的构建中间物
+build/
+target/
+third_party/
+*.log
+.msvc.bat
