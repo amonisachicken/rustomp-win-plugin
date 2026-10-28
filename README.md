@@ -57,6 +57,18 @@ ARTIFACT: C:/Users/me/deve/sparklin-drive/target/bundled/Sparklin Drive Mono.cla
 
 框架侧据此判断"打包成功与否"，**不需要知道 Windows 的任何细节**。
 
+### 本机已跑通（2026-10-28，Windows 10 19044）
+
+| 项 | 实测 |
+|---|---|
+| 工具链 | rustup `stable-x86_64-pc-windows-msvc` 1.99.1 + VS Build Tools 2022 17.14（VCTools 工作负载，含 Win11 SDK 10.0.26100） |
+| 首次全量编译 | **41 s**（nih-plug + egui + vst3-sys 的 C++ 部分） |
+| 产物 | `Sparklin Drive Mono/Stereo .vst3`（目录包，内层 `Contents/x86_64-win/<name>.vst3`）+ `.clap`（单文件 DLL） |
+| clap-probe | mono → `channels=1` 进/出；stereo → `channels=2` 进/出；`id` 带 `.mono/.stereo` 后缀 ✓ |
+| pluginval | mono / stereo 各 **strictness 5 全部通过**（含 bus 布局、参数、状态、离线渲染） |
+| 安装落点 | `%LOCALAPPDATA%\Programs\Common\{VST3,CLAP}\Sparklin Drive {Mono,Stereo}.*` ✓ |
+| 契约 B | `pack.sh ... 2>/dev/null` 的 stdout **恰好只有** `ARTIFACT:` 行 ✓ |
+
 ---
 
 ## 参数

@@ -72,7 +72,7 @@ else
             OUT="$("$PROBE" "$CLAP" 2>&1)"
             rc=$?
             set -e
-            printf '%s\n' "$OUT" | sed 's/^/    /'
+            printf '%s\n' "$OUT" | sed 's/^/    /' >&2
             if [ "$rc" != "0" ]; then
                 warn "clap-probe 退出码 ${rc}（期望 0）"
                 FAILED=1
@@ -112,14 +112,16 @@ else
     PV_ARGS+=(--output-dir "$ROOT/build/pluginval-logs")
     log "  pluginval ${PV_ARGS[*]}"
     set +e
-    "$PV" "${PV_ARGS[@]}" 2>&1 | sed 's/^/    /'
+    "$PV" "${PV_ARGS[@]}" 2>&1 | sed 's/^/    /' >&2
     rc=${PIPESTATUS[0]}
     set -e
     if [ "$rc" != "0" ]; then
         warn "pluginval 失败（退出码 ${rc}，日志：$ROOT/build/pluginval-logs）"
         FAILED=1
     else
-        ok "pluginval 通过（strictness ${PLUGINVAL_STRICTNESS:-5}${WITH_GUI:+, 含 GUI}）"
+        _gui="跳过 GUI"
+        [ "$WITH_GUI" = "1" ] && _gui="含 GUI"
+        ok "pluginval 通过（strictness ${PLUGINVAL_STRICTNESS:-5}，${_gui}）"
     fi
 fi
 

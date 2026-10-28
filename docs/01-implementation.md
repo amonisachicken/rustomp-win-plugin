@@ -80,3 +80,37 @@ pack.sh
 
 `RUSTOMP_REQUIRE_VERIFY=1` 时**缺工具即失败**：不允许"没验证"被当成"验证通过"
 （mac 仓用 `RUSTOMP_REQUIRE_NGSPICE` 学到的教训）。
+
+---
+
+## 5. 实测结果（2026-10-28，本机首次跑通）
+
+```text
+$ ./pack.sh ../sparklin-drive
+==> 环境体检 → 14 项全绿
+########## variant: mono ##########
+   Finished `release` profile [optimized] target(s) in 41.34s
+   Created a CLAP bundle at '...\target\bundled\Sparklin Drive Mono.clap'
+   Created a VST3 bundle at '...\target\bundled\Sparklin Drive Mono.vst3'
+  ✓ VST3 / CLAP 结构校验
+  ✓ 安装到 %LOCALAPPDATA%\Programs\Common\{VST3,CLAP}
+  ✓ clap-probe：id=com.honeypieeffects.sparklin_drive.mono，进/出 channels=1 type=mono
+  ✓ pluginval 通过（strictness 5，跳过 GUI）
+########## variant: stereo ##########  → channels=2 / id=...stereo，同样全过
+ARTIFACT: .../Sparklin Drive Mono.vst3
+ARTIFACT: .../Sparklin Drive Mono.clap
+ARTIFACT: .../Sparklin Drive Stereo.vst3
+ARTIFACT: .../Sparklin Drive Stereo.clap
+```
+
+三个结论：
+
+1. **不需要事后改名**：`bundler.toml` 的 `name` 直接决定 VST3 内外层名与 `.clap` 文件名，
+   nih-plug 一步产出 `Sparklin Drive Mono.vst3/Contents/x86_64-win/Sparklin Drive Mono.vst3`。
+2. **变体确实生效**：clap-probe 与 pluginval 都独立确认了 mono=1ch / stereo=2ch，
+   且 CLAP id 带 `.mono` / `.stereo` 后缀（新身份，宿主的扫描缓存天然不冲突）。
+3. **契约 B 干净**：`2>/dev/null` 后 stdout 恰好四行 `ARTIFACT:`，没有半句人话混进去
+   （这一条最初是错的：`ok()` 直接打 stdout，已被 `_contract.sh` 抓出来并修掉）。
+
+首次环境搭建的耗时（一次性）：VS Build Tools 约 1.7 GB 下载 —— 走系统代理时反复超时，
+把 `*.visualstudio.microsoft.com` 加进 WinINET 代理例外后升到 1.6–2.4 MB/s。

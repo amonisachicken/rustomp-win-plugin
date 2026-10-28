@@ -16,7 +16,7 @@ source "$ROOT/scripts/lib.sh"
 
 bad()  { printf '  ✗ %s\n' "$*" >&2; MISSING=1; }
 MISSING=0
-[ "$QUIET" = "1" ] || echo "==> 环境体检（rustomp-win-plugin）"
+[ "$QUIET" = "1" ] || echo "==> 环境体检（rustomp-win-plugin）" >&2
 
 # ---- Rust：必须是 MSVC host，不能是 MSYS2 的 -gnu ----
 if command -v rustc >/dev/null 2>&1; then
@@ -124,11 +124,13 @@ PY
 fi
 
 # ---- 可选：宿主侧验证器 ----
-if command -v pluginval >/dev/null 2>&1; then
+if [ -x "$ROOT/third_party/pluginval/pluginval.exe" ]; then
+    ok "pluginval：$ROOT/third_party/pluginval/pluginval.exe"
+elif command -v pluginval >/dev/null 2>&1; then
     ok "pluginval：$(command -v pluginval)"
 else
     warn "没有 pluginval（VST3 宿主侧验证会跳过）
-      装法见 deps.lock：解压到 PATH 里，或设 PLUGINVAL=/path/to/pluginval.exe"
+      装法：./scripts/fetch-third-party.sh --pluginval（或设 PLUGINVAL=/path/to/pluginval.exe）"
 fi
 
 exit "$MISSING"

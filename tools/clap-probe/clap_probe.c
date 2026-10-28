@@ -71,7 +71,7 @@ int main(int argc, char **argv) {
         printf("\n[%u] id=%s\n    name=%s  vendor=%s  version=%s\n", i, d->id, d->name, d->vendor,
                d->version);
         printf("    features:");
-        for (const char **f = d->features; f && *f; f++) printf(" %s", *f);
+        for (const char *const *f = d->features; f && *f; f++) printf(" %s", *f);
         printf("\n");
 
         const clap_plugin_t *p = fac->create_plugin(fac, &host, d->id);
