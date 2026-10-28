@@ -37,8 +37,9 @@ if [ -z "$BUNDLE_NAME" ]; then
     esac
 fi
 
-# cargo-nih-plug 会 chdir 到**插件项目的 workspace 根**再读 bundler.toml
-OUT="$PLUGIN_DIR/bundler.toml"
+# cargo-nih-plug 会 chdir 到**workspace 根**再读 bundler.toml，
+# 所以写在那儿（插件只是某个 workspace 的成员时，两者不是同一个目录）。
+OUT="$WS_ROOT/bundler.toml"
 cat > "$OUT" <<EOT
 # 由 rustomp-win-plugin 的 scripts/gen-bundler-toml.sh 从 rustomp.toml 生成，请勿手改。
 

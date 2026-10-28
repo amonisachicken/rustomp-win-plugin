@@ -49,7 +49,7 @@ case "$ARCH" in
     *) die "未知架构：$ARCH（x64|arm64）" ;;
 esac
 NAME="$PLUGIN_NAME$SUFFIX$ARCH_SUFFIX"
-BUNDLED="$PLUGIN_DIR/target/bundled"
+BUNDLED="$WS_ROOT/target/bundled"
 VST3="$BUNDLED/${NAME}.vst3"
 CLAP="$BUNDLED/${NAME}.clap"
 

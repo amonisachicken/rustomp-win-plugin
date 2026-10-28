@@ -18,6 +18,31 @@ bad()  { printf '  ✗ %s\n' "$*" >&2; MISSING=1; }
 MISSING=0
 [ "$QUIET" = "1" ] || echo "==> 环境体检（rustomp-win-plugin）" >&2
 
+# ---- Shell 与基础工具（干净机器最容易缺的就是这一层）----
+# 本仓全部脚本是 bash + MSYS 语义（cygpath / cp -R / POSIX 路径），
+# 在 cmd/PowerShell/Linux-WSL 的 bash 里都不会正常工作。
+case "$(uname -s 2>/dev/null || echo unknown)" in
+    MSYS_NT*|MINGW64_NT*|MINGW32_NT*)
+        ok "bash：MSYS 运行时（$(uname -s)，bash ${BASH_VERSION%%(*}）" ;;
+    CYGWIN*)
+        warn "bash：Cygwin（未实测；cygpath 与路径语义与 MSYS 有差异，建议改用 Git for Windows 或 MSYS2）" ;;
+    Linux|Darwin)
+        bad "bash：$(uname -s) —— 这是 **Windows** 打包器，必须在 Windows 上的
+      Git for Windows（Git Bash）或 MSYS2 里跑，不能用 WSL 的 bash" ;;
+    *)
+        warn "bash：$(uname -s)（未识别；需要 MSYS 运行时）" ;;
+esac
+_missing_tools=""
+for c in cygpath git sed tr head tail find mktemp cp rm mkdir; do
+    command -v "$c" >/dev/null 2>&1 || _missing_tools="$_missing_tools $c"
+done
+if [ -z "$_missing_tools" ]; then
+    ok "基础工具（cygpath/git/sed/tr/find/mktemp/cp …）"
+else
+    bad "缺基础命令：$_missing_tools
+      → 装 Git for Windows（自带 Git Bash）或 MSYS2 后，在 **Git Bash / MSYS2 shell** 里跑本脚本"
+fi
+
 # ---- Rust：必须是 MSVC host，不能是 MSYS2 的 -gnu ----
 if command -v rustc >/dev/null 2>&1; then
     _host="$(rustc -vV 2>/dev/null | awk '/^host:/{print $2}')"

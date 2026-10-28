@@ -3,6 +3,8 @@
 #
 # **rustomp-win-plugin 的入口** —— 契约 B 的实现（见 rustomp/docs/ecosystem.md §2）。
 #
+# 适用于**任何** rustomp 插件项目：所有插件相关的值都来自 <plugin_dir>/rustomp.toml。
+#
 #   ./pack.sh <plugin_dir> [--variant mono|stereo|dual]... [--format vst3|clap]...
 #             [--arch x64|arm64|both] [--install-both] [--no-install] [--no-verify]
 #
@@ -21,7 +23,10 @@ PACKER_VERSION="$(git -C "$PACKER_ROOT" describe --tags --abbrev=0 2>/dev/null |
 [ -n "$PACKER_VERSION" ] || PACKER_VERSION="0.1.0"
 
 usage() {
-    sed -n '4,15p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+    sed -n '4,17p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+    echo
+    echo "默认值：variant 取 rustomp.toml 的 [build] variants（清单没写 → mono stereo）；"
+    echo "        format = vst3 + clap；arch = x64；装到 %LOCALAPPDATA%\\Programs\\Common\\"
     echo
     echo "架构（--arch）："
     echo "  x64     默认；产出 <Name>.vst3 / <Name>.clap"
@@ -71,7 +76,7 @@ PLUGIN_DIR="$(cd "$PLUGIN_DIR" && pwd)" || die "插件目录不存在：$PLUGIN_
 export PLUGIN_DIR
 [ -f "$PLUGIN_DIR/rustomp.toml" ] || die "${PLUGIN_DIR} 不是插件项目（没有 rustomp.toml）"
 
-[ ${#VARIANTS[@]} -gt 0 ] || VARIANTS=(mono stereo)
+# 变体的默认值在读完 manifest 之后再定（见下面第 3 步）
 [ ${#FORMATS[@]}  -gt 0 ] || FORMATS=(vst3 clap)
 for v in "${VARIANTS[@]}"; do
     case "$v" in mono|stereo|dual) ;; *) die "不支持的 variant：${v}（mono|stereo|dual）" ;; esac
@@ -118,7 +123,35 @@ PY
     log "    requires.packer = ${REQ}（当前 ${PACKER_VERSION}）"
 fi
 
-# ---------------------------------------------------------------- 3. 逐 variant 构建
+# ---------------------------------------------------------------- 3. 变体：默认取清单
+# 默认变体从 rustomp.toml 的 [build] 读（契约 A），不再硬编码 —— 一个只出 dual 的插件
+# 不该被逼着出 mono/stereo，反之亦然。
+if [ ${#VARIANTS[@]} -eq 0 ]; then
+    read -r -a _manifest_variants <<< "${BUILD_VARIANTS:-}"
+    if [ ${#_manifest_variants[@]} -gt 0 ]; then
+        VARIANTS=("${_manifest_variants[@]}")
+        log "    变体（来自 rustomp.toml [build] variants）：${VARIANTS[*]}"
+    elif [ "${BUILD_DUAL:-0}" = "1" ]; then
+        VARIANTS=(dual)
+        log "    变体（rustomp.toml dual_variant = true）：dual"
+    else
+        VARIANTS=(mono stereo)
+        log "    变体（清单未声明，取默认）：mono stereo"
+    fi
+else
+    # 用户显式指定：若清单声明了 variants，只做提示，不阻断（故意允许对照构建）
+    read -r -a _declared <<< "${BUILD_VARIANTS:-}"
+    if [ ${#_declared[@]} -gt 0 ]; then
+        for v in "${VARIANTS[@]}"; do
+            case " ${_declared[*]} " in
+                *" $v "*) ;;
+                *) warn "清单的 [build] variants 里没有 ${v}（声明的是：${_declared[*]}）；仍按你的要求构建" ;;
+            esac
+        done
+    fi
+fi
+
+# ---------------------------------------------------------------- 4. 逐变体构建
 for v in "${VARIANTS[@]}"; do
     log
     log "########## variant: ${v} ##########"
@@ -129,7 +162,7 @@ for v in "${VARIANTS[@]}"; do
     "$PACKER_ROOT/scripts/build-variant.sh" "${args[@]}"
 done
 
-# ---------------------------------------------------------------- 4. 契约 B 的输出
+# ---------------------------------------------------------------- 5. 契约 B 的输出
 log
 log "==> 产物"
 ARTIFACTS=()
@@ -146,7 +179,9 @@ for v in "${VARIANTS[@]}"; do
     done < "$TSV"
 done
 
+# 路径统一成 Windows 原生形式（C:/…）：这是 Windows 打包器，产物路径最终会出现在
+# 资源管理器、CI 工件、以及宿主里；MSYS 的 /c/… 形式对 Windows 侧调用者不友好。
 for a in "${ARTIFACTS[@]}"; do
-    printf 'ARTIFACT: %s\n' "$a"
+    printf 'ARTIFACT: %s\n' "$(cygpath -m "$a")"
 done
 [ ${#ARTIFACTS[@]} -gt 0 ] || die "没有任何产物（检查 --format 与构建日志）"

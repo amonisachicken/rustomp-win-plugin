@@ -142,11 +142,11 @@ egui 侧 `baseview`（git）也走 C/C++ + Windows 原生窗口。GNU ABI 的 MS
 | Q4 | 默认安装位置 | ✅ **用户级** `%LOCALAPPDATA%\Programs\Common\{VST3,CLAP}` |
 | Q5 | MSVC 工具链安装 | ✅ winget 装 Build Tools 2022（含 VCTools 工作负载） |
 
-落地结果与实测数据见 `docs/01-implementation.md` §5。
+落地结果与实测数据见 [`09-devlog.md`](09-devlog.md) 的 E1–E7，实现形态见 [`02-architecture.md`](02-architecture.md)。
 
 ---
 
-## 6. 我对实现形态的预判（供决策参考，非结论）
+## 6. 当时的实现预判（已落地，差异见注）
 
 ```text
 rustomp-win-plugin/
@@ -160,6 +160,11 @@ rustomp-win-plugin/
   capabilities.toml          platforms = ["windows"], formats = ["vst3", ...]
   docs/                      与本文同源的实现说明
 ```
+
+> **落地后的两处差异**：① 没有单独的 `msvc-env.sh`，找 vcvars 与"在 MSVC 环境里跑命令"
+> 都收进了 `scripts/lib.sh`（`find_vcvars <arch>` / `msvc_run`），因为 arm64 让"选哪个
+> vcvars"变成了一个参数；② 多了一个 `scripts/pe_machine.py`（交叉编译架构兜底）。
+> 其余与预判一致。
 
 预期**没有** CMake / clap-wrapper / patches / 签名（Authenticode 可后续单列）/ plist，
 所以 Windows 打包器的代码量大概是 mac 的 1/3，难点集中在：MSVC 环境注入、VST3 目录包的命名与安装、

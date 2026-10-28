@@ -103,7 +103,7 @@ for a in "${ARCHES[@]}"; do
     msvc_run "$PLUGIN_DIR" "$a" "$CARGO_CMD" \
         || die "编译/打包失败（${CARGO_CMD}）"
 
-    BUNDLED="$PLUGIN_DIR/target/bundled"
+    BUNDLED="$WS_ROOT/target/bundled"
     VST3="$BUNDLED/${NAME}.vst3"
     CLAP="$BUNDLED/${NAME}.clap"
 
