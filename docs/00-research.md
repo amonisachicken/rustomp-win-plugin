@@ -132,15 +132,17 @@ egui 侧 `baseview`（git）也走 C/C++ + Windows 原生窗口。GNU ABI 的 MS
 
 ---
 
-## 5. 待决策项（交用户定）
+## 5. 待决策项（**已全部决策，2026-10-28**）
 
-| # | 问题 | 选项 |
+| # | 问题 | 结论 |
 |---|---|---|
-| Q1 | 产物格式范围（AU 在 Windows 不存在） | (a) VST3 + CLAP 双格式，对齐 mac；(b) **只做 VST3**（CLAP 后补）；(c) VST3 + CLAP + VST2 |
-| Q2 | 打包器脚本形态 | (a) **bash（MSYS2）**，与 mac 同构、共享词汇；(b) PowerShell 7；(c) 单文件 Python |
-| Q3 | 宿主侧验证手段 | (a) **pluginval**（Tracktion，免费，CLI，可调 strictness）；(b) Steinberg VST3 SDK `validator`；(c) 自写 Windows 版 CLAP probe + 最小 VST3 加载器；(d) 只在你自己的 DAW 里手测 |
-| Q4 | 默认安装位置 | (a) **用户级** `%LOCALAPPDATA%\Programs\Common\{VST3,CLAP}`（免 UAC）；(b) 系统级 `%ProgramFiles%\Common Files\VST3`（需提权）；(c) 只产出、默认不安装 |
-| Q5 | 是否现在就装 MSVC 工具链 | (a) 我用 winget 装 Build Tools 2022（会弹 UAC）；(b) 你自己装，我等你；(c) 先只做设计/骨架，稍后装 |
+| Q1 | 产物格式范围（AU 在 Windows 不存在） | ✅ **VST3 + CLAP** |
+| Q2 | 打包器脚本形态 | ✅ **bash（MSYS2）**，与 mac 同构 |
+| Q3 | 宿主侧验证手段 | ✅ **pluginval + 自写 clap-probe** |
+| Q4 | 默认安装位置 | ✅ **用户级** `%LOCALAPPDATA%\Programs\Common\{VST3,CLAP}` |
+| Q5 | MSVC 工具链安装 | ✅ winget 装 Build Tools 2022（含 VCTools 工作负载） |
+
+落地结果与实测数据见 `docs/01-implementation.md` §5。
 
 ---
 
