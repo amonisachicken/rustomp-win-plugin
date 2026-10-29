@@ -17,8 +17,9 @@ cargo nih-plug bundle（MSVC）        ──►    取产物 / 校验 PE 架构
                                            打印 ARTIFACT: <路径>  ──►  VST3 / CLAP
 ```
 
-macOS 的同位实现是 [rustomp-mac-plugin](https://github.com/amonisachicken/rustomp-mac-plugin)，
-框架是 [rustomp](https://github.com/amonisachicken/rustomp)；
+macOS 的同位实现是 [rustomp-mac-plugin](https://github.com/amonisachicken/rustomp-mac-plugin)
+（AU/VST3/CLAP + DMG），Linux 是 [rustomp-linux-plugin](https://github.com/amonisachicken/rustomp-linux-plugin)
+（VST3/CLAP + tar.gz）；框架是 [rustomp](https://github.com/amonisachicken/rustomp)；
 仓库边界与三个跨仓契约见 rustomp 的 `docs/ecosystem.md`。
 
 > **Windows 上没有 AU。** Audio Unit 是 Apple 的宿主 API，所以本仓产出 **VST3 + CLAP**；
